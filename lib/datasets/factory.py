@@ -11,7 +11,7 @@ from __future__ import division
 from __future__ import print_function
 
 __sets = {}
-from datasets.pascal_voc import pascal_voc
+#from datasets.pascal_voc import pascal_voc
 from datasets.baidu_voc import Baidu_voc
 from datasets.coco import coco
 from datasets.imagenet import imagenet
@@ -19,13 +19,13 @@ from datasets.vg import vg
 
 import numpy as np
 
+'''
 # Set up voc_<year>_<split>
 for year in ['2007', '2012']:
   for split in ['train', 'val', 'trainval', 'test']:
     name = 'voc_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: pascal_voc(split, year))
 
-'''
 # Set up coco_2014_<split>
 for year in ['2014']:
   for split in ['train', 'val', 'minival', 'valminusminival', 'trainval']:

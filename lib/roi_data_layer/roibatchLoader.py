@@ -72,7 +72,8 @@ class roibatchLoader(data.Dataset):
     if self.training:
         np.random.shuffle(blobs['gt_boxes'])
         gt_boxes = torch.from_numpy(blobs['gt_boxes'])
-
+        np.random.shuffle(blobs['gt_quadboxes'])
+        gt_quadboxes = torch.from_numpy(blobs['gt_quadboxes'])
         ########################################################
         # padding the input image to fixed size for each group #
         ########################################################
@@ -117,11 +118,19 @@ class roibatchLoader(data.Dataset):
                 # shift y coordiante of gt_boxes
                 gt_boxes[:, 1] = gt_boxes[:, 1] - float(y_s)
                 gt_boxes[:, 3] = gt_boxes[:, 3] - float(y_s)
-
+                # multiplex bbox's y_s to quadbox
+                gt_quadboxes[:, 1] = gt_quadboxes[:, 1] - float(y_s)
+                gt_quadboxes[:, 3] = gt_quadboxes[:, 3] - float(y_s)
+                gt_quadboxes[:, 5] = gt_quadboxes[:, 5] - float(y_s)
+                gt_quadboxes[:, 7] = gt_quadboxes[:, 7] - float(y_s)
                 # update gt bounding box according the trip
                 gt_boxes[:, 1].clamp_(0, trim_size - 1)
                 gt_boxes[:, 3].clamp_(0, trim_size - 1)
-
+                
+                gt_quadboxes[:, 1].clamp_(0, trim_size - 1)
+                gt_quadboxes[:, 3].clamp_(0, trim_size - 1)
+                gt_quadboxes[:, 5].clamp_(0, trim_size - 1)
+                gt_quadboxes[:, 7].clamp_(0, trim_size - 1)
             else:
                 # this means that data_width >> data_height, we need to crop the
                 # data_width
@@ -153,9 +162,20 @@ class roibatchLoader(data.Dataset):
                 # shift x coordiante of gt_boxes
                 gt_boxes[:, 0] = gt_boxes[:, 0] - float(x_s)
                 gt_boxes[:, 2] = gt_boxes[:, 2] - float(x_s)
+
+                gt_quadboxes[:, 0] = gt_quadboxes[:, 0] - float(x_s)
+                gt_quadboxes[:, 2] = gt_quadboxes[:, 2] - float(x_s)
+                gt_quadboxes[:, 4] = gt_quadboxes[:, 4] - float(x_s)
+                gt_quadboxes[:, 6] = gt_quadboxes[:, 6] - float(x_s)
+
                 # update gt bounding box according the trip
                 gt_boxes[:, 0].clamp_(0, trim_size - 1)
                 gt_boxes[:, 2].clamp_(0, trim_size - 1)
+                
+                gt_quadboxes[:, 0].clamp_(0, trim_size - 1)
+                gt_quadboxes[:, 2].clamp_(0, trim_size - 1)
+                gt_quadboxes[:, 4].clamp_(0, trim_size - 1)
+                gt_quadboxes[:, 6].clamp_(0, trim_size - 1)
 
         # based on the ratio, padding the image.
         if ratio < 1:
@@ -182,6 +202,7 @@ class roibatchLoader(data.Dataset):
             padding_data = data[0][:trim_size, :trim_size, :]
             # gt_boxes.clamp_(0, trim_size)
             gt_boxes[:, :4].clamp_(0, trim_size)
+            gt_quadboxes[:, :8].clamp_(0, trim_size)
             im_info[0, 0] = trim_size
             im_info[0, 1] = trim_size
 
@@ -191,10 +212,15 @@ class roibatchLoader(data.Dataset):
         keep = torch.nonzero(not_keep == 0).view(-1)
 
         gt_boxes_padding = torch.FloatTensor(self.max_num_box, gt_boxes.size(1)).zero_()
+        gt_quadboxes_padding = torch.FloatTensor(self.max_num_box, gt_quadboxes.size(1)).zero_()
         if keep.numel() != 0:
             gt_boxes = gt_boxes[keep]
-            num_boxes = min(gt_boxes.size(0), self.max_num_box)
+            gt_quadboxes = gt_quadboxes[keep]
+
+            num_boxes = min(gt_boxes.size(0), gt_quadboxes.size(0), self.max_num_box)
+            
             gt_boxes_padding[:num_boxes,:] = gt_boxes[:num_boxes]
+            gt_quadboxes_padding[:num_boxes,:] = gt_quadboxes[:num_boxes]
         else:
             num_boxes = 0
 
@@ -202,15 +228,16 @@ class roibatchLoader(data.Dataset):
         padding_data = padding_data.permute(2, 0, 1).contiguous()
         im_info = im_info.view(3)
 
-        return padding_data, im_info, gt_boxes_padding, num_boxes
+        return padding_data, im_info, gt_boxes_padding, gt_quadboxes_padding, num_boxes
     else:
         data = data.permute(0, 3, 1, 2).contiguous().view(3, data_height, data_width)
         im_info = im_info.view(3)
 
         gt_boxes = torch.FloatTensor([1,1,1,1,1])
+        gt_quadboxes = torch.FloatTensor([1,1,1,1,1,1,1,1,1])
         num_boxes = 0
 
-        return data, im_info, gt_boxes, num_boxes
+        return data, im_info, gt_boxes, gt_quadboxes, num_boxes
 
   def __len__(self):
     return len(self._roidb)

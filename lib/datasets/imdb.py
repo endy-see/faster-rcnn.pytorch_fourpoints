@@ -121,7 +121,21 @@ class imdb(object):
       boxes[:, 0] = widths[i] - oldx2 - 1
       boxes[:, 2] = widths[i] - oldx1 - 1
       assert (boxes[:, 2] >= boxes[:, 0]).all()
+
+      quadboxes = self.roidb[i]['quadboxes'].copy()
+      oldqx1 = quadboxes[:, 0].copy()
+      oldqx2 = quadboxes[:, 2].copy()
+      oldqx3 = quadboxes[:, 4].copy()
+      oldqx4 = quadboxes[:, 6].copy()
+      quadboxes[:, 0] = widths[i] - oldqx2 - 1
+      quadboxes[:, 2] = widths[i] - oldqx1 - 1
+      quadboxes[:, 4] = widths[i] - oldqx4 - 1
+      quadboxes[:, 6] = widths[i] - oldqx3 - 1
+      assert (quadboxes[:, 2] >= quadboxes[:, 0]).all()
+      assert (quadboxes[:, 4] >= quadboxes[:, 6]).all()
+
       entry = {'boxes': boxes,
+               'quadboxes': quadboxes,
                'gt_overlaps': self.roidb[i]['gt_overlaps'],
                'gt_classes': self.roidb[i]['gt_classes'],
                'flipped': True}
