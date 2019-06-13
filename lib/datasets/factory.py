@@ -12,6 +12,7 @@ from __future__ import print_function
 
 __sets = {}
 from datasets.pascal_voc import pascal_voc
+from datasets.baidu_voc import Baidu_voc
 from datasets.coco import coco
 from datasets.imagenet import imagenet
 from datasets.vg import vg
@@ -24,6 +25,7 @@ for year in ['2007', '2012']:
     name = 'voc_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: pascal_voc(split, year))
 
+'''
 # Set up coco_2014_<split>
 for year in ['2014']:
   for split in ['train', 'val', 'minival', 'valminusminival', 'trainval']:
@@ -58,12 +60,21 @@ for split in ['train', 'val', 'val1', 'val2', 'test']:
     devkit_path = 'data/imagenet/ILSVRC/devkit'
     data_path = 'data/imagenet/ILSVRC'
     __sets[name] = (lambda split=split, devkit_path=devkit_path, data_path=data_path: imagenet(split,devkit_path,data_path))
+'''
+
+__set_classes = {
+  "HandeFourPointDataset": ('__background__', 'text')
+}
 
 def get_imdb(name):
   """Get an imdb (image database) by name."""
-  if name not in __sets:
-    raise KeyError('Unknown dataset: {}'.format(name))
-  return __sets[name]()
+  if name in __sets:
+    return __sets[name]()
+  
+  dataset_names = name.split('_')
+  if dataset_names[0] in __set_classes:
+    return Baidu_voc(dataset_names[0], dataset_names[1], __set_classes[dataset_names[0]])
+  raise KeyError('Unknown dataset: {}'.format(name))
 
 
 def list_imdbs():
