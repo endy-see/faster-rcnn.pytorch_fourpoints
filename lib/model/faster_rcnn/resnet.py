@@ -243,8 +243,10 @@ class resnet(_fasterRCNN):
     self.RCNN_cls_score = nn.Linear(2048, self.n_classes)
     if self.class_agnostic:
       self.RCNN_bbox_pred = nn.Linear(2048, 4)
+      self.RCNN_quadbox_pred = nn.Linear(2048, 8)
     else:
       self.RCNN_bbox_pred = nn.Linear(2048, 4 * self.n_classes)
+      self.RCNN_quadbox_pred = nn.Linear(2048, 8 * self.n_classes)
 
     # Fix blocks
     for p in self.RCNN_base[0].parameters(): p.requires_grad=False

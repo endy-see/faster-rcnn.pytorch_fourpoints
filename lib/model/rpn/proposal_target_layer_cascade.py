@@ -14,7 +14,7 @@ import torch.nn as nn
 import numpy as np
 import numpy.random as npr
 from ..utils.config import cfg
-from .bbox_transform import bbox_overlaps_batch, bbox_transform_batch
+from .bbox_transform import bbox_overlaps_batch, bbox_transform_batch, quadbox_transform_batch
 import pdb
 
 class _ProposalTargetLayer(nn.Module):
@@ -29,12 +29,20 @@ class _ProposalTargetLayer(nn.Module):
         self.BBOX_NORMALIZE_MEANS = torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS)
         self.BBOX_NORMALIZE_STDS = torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS)
         self.BBOX_INSIDE_WEIGHTS = torch.FloatTensor(cfg.TRAIN.BBOX_INSIDE_WEIGHTS)
+        self.QUADBOX_NORMALIZE_MEANS = torch.FloatTensor(cfg.TRAIN.QUADBOX_NORMALIZE_MEANS)
+        self.QUADBOX_NORMALIZE_STDS = torch.FloatTensor(cfg.TRAIN.QUADBOX_NORMALIZE_STDS)
+        self.QUADBOX_INSIDE_WEIGHTS = torch.FloatTensor(cfg.TRAIN.QUADBOX_INSIDE_WEIGHTS)
 
-    def forward(self, all_rois, gt_boxes, num_boxes):
+
+    def forward(self, all_rois, gt_boxes, gt_quadboxes, num_boxes):
 
         self.BBOX_NORMALIZE_MEANS = self.BBOX_NORMALIZE_MEANS.type_as(gt_boxes)
         self.BBOX_NORMALIZE_STDS = self.BBOX_NORMALIZE_STDS.type_as(gt_boxes)
         self.BBOX_INSIDE_WEIGHTS = self.BBOX_INSIDE_WEIGHTS.type_as(gt_boxes)
+
+        self.QUADBOX_NORMALIZE_MEANS = self.QUADBOX_NORMALIZE_MEANS.type_as(gt_quadboxes)
+        self.QUADBOX_NORMALIZE_STDS = self.QUADBOX_NORMALIZE_STDS.type_as(gt_quadboxes)
+        self.QUADBOX_INSIDE_WEIGHTS = self.QUADBOX_INSIDE_WEIGHTS.type_as(gt_quadboxes)
 
         gt_boxes_append = gt_boxes.new(gt_boxes.size()).zero_()
         gt_boxes_append[:,:,1:5] = gt_boxes[:,:,:4]
@@ -47,13 +55,16 @@ class _ProposalTargetLayer(nn.Module):
         fg_rois_per_image = int(np.round(cfg.TRAIN.FG_FRACTION * rois_per_image))
         fg_rois_per_image = 1 if fg_rois_per_image == 0 else fg_rois_per_image
 
-        labels, rois, bbox_targets, bbox_inside_weights = self._sample_rois_pytorch(
-            all_rois, gt_boxes, fg_rois_per_image,
+        labels, rois, bbox_targets, quadbox_targets, bbox_inside_weights, quadbox_inside_weights = self._sample_rois_pytorch(
+            all_rois, gt_boxes, gt_quadboxes, fg_rois_per_image,
             rois_per_image, self._num_classes)
 
         bbox_outside_weights = (bbox_inside_weights > 0).float()
+        quadbox_outside_weights = (quadbox_inside_weights > 0).float()
 
-        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights
+        return rois, labels, bbox_targets, quadbox_targets,\
+               bbox_inside_weights, quadbox_inside_weights,\
+               bbox_outside_weights, quadbox_outside_weights
 
     def backward(self, top, propagate_down, bottom):
         """This layer does not propagate gradients."""
@@ -63,7 +74,7 @@ class _ProposalTargetLayer(nn.Module):
         """Reshaping happens during the call to forward."""
         pass
 
-    def _get_bbox_regression_labels_pytorch(self, bbox_target_data, labels_batch, num_classes):
+    def _get_bbox_regression_labels_pytorch(self, bbox_target_data, quadbox_target_data, labels_batch, num_classes):
         """Bounding-box regression targets (bbox_target_data) are stored in a
         compact form b x N x (class, tx, ty, tw, th)
 
@@ -79,6 +90,8 @@ class _ProposalTargetLayer(nn.Module):
         clss = labels_batch
         bbox_targets = bbox_target_data.new(batch_size, rois_per_image, 4).zero_()
         bbox_inside_weights = bbox_target_data.new(bbox_targets.size()).zero_()
+        quadbox_targets = quadbox_target_data.new(batch_size, rois_per_image, 8).zero_()
+        quadbox_inside_weights = quadbox_target_data.new(quadbox_targets.size()).zero_()
 
         for b in range(batch_size):
             # assert clss[b].sum() > 0
@@ -90,30 +103,37 @@ class _ProposalTargetLayer(nn.Module):
                 bbox_targets[b, ind, :] = bbox_target_data[b, ind, :]
                 bbox_inside_weights[b, ind, :] = self.BBOX_INSIDE_WEIGHTS
 
-        return bbox_targets, bbox_inside_weights
+                quadbox_targets[b, ind, :] = quadbox_target_data[b, ind, :]
+                quadbox_inside_weights[b, ind, :] = self.QUADBOX_INSIDE_WEIGHTS
+        
+        return bbox_targets, quadbox_targets, bbox_inside_weights, quadbox_inside_weights
 
 
-    def _compute_targets_pytorch(self, ex_rois, gt_rois):
+    def _compute_targets_pytorch(self, ex_rois, gt_rois, gt_quadrois):
         """Compute bounding-box regression targets for an image."""
 
         assert ex_rois.size(1) == gt_rois.size(1)
         assert ex_rois.size(2) == 4
         assert gt_rois.size(2) == 4
+        assert gt_quadrois.size(2) == 8
 
         batch_size = ex_rois.size(0)
         rois_per_image = ex_rois.size(1)
 
         targets = bbox_transform_batch(ex_rois, gt_rois)
+        quadtargets = quadbox_transform_batch(ex_rois, gt_quadrois)
 
         if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
             # Optionally normalize targets by a precomputed mean and stdev
             targets = ((targets - self.BBOX_NORMALIZE_MEANS.expand_as(targets))
                         / self.BBOX_NORMALIZE_STDS.expand_as(targets))
+        if cfg.TRAIN.QUADBOX_NORMALIZE_TARGETS_PRECOMPUTED:
+            quadtargets = ((quadtargets - self.QUADBOX_NORMALIZE_MEANS.expand_as(quadtargets))
+                           / self.QUADBOX_NORMALIZE_STDS.expand_as(quadtargets))
+        return targets, quadtargets
 
-        return targets
 
-
-    def _sample_rois_pytorch(self, all_rois, gt_boxes, fg_rois_per_image, rois_per_image, num_classes):
+    def _sample_rois_pytorch(self, all_rois, gt_boxes, gt_quadboxes, fg_rois_per_image, rois_per_image, num_classes):
         """Generate a random sample of RoIs comprising foreground and background
         examples.
         """
@@ -136,6 +156,7 @@ class _ProposalTargetLayer(nn.Module):
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch  = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
+        gt_quadrois_batch = all_rois.new(batch_size, rois_per_image, 9).zero_()
         # Guard against the case when an image has fewer than max_fg_rois_per_image
         # foreground RoIs
         for i in range(batch_size):
@@ -203,11 +224,12 @@ class _ProposalTargetLayer(nn.Module):
             rois_batch[i,:,0] = i
 
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
+            gt_quadrois_batch[i] = gt_quadboxes[i][gt_assignment[i][keep_inds]]
+        
+        bbox_target_data, quadbox_target_data = self._compute_targets_pytorch(
+                rois_batch[:,:,1:5], gt_rois_batch[:,:,:4], gt_quadrois_batch[:,:,:8])
 
-        bbox_target_data = self._compute_targets_pytorch(
-                rois_batch[:,:,1:5], gt_rois_batch[:,:,:4])
+        bbox_targets, quadbox_targets, bbox_inside_weights, quadbox_inside_weights = \
+                self._get_bbox_regression_labels_pytorch(bbox_target_data, quadbox_target_data, labels_batch, num_classes)
 
-        bbox_targets, bbox_inside_weights = \
-                self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)
-
-        return labels_batch, rois_batch, bbox_targets, bbox_inside_weights
+        return labels_batch, rois_batch, bbox_targets, quadbox_targets, bbox_inside_weights, quadbox_inside_weights

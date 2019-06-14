@@ -29,6 +29,7 @@ class _fasterRCNN(nn.Module):
         # loss
         self.RCNN_loss_cls = 0
         self.RCNN_loss_bbox = 0
+        self.RCNN_loss_quadbox = 0
 
         # define rpn
         self.RCNN_rpn = _RPN(self.dout_base_model)
@@ -40,11 +41,12 @@ class _fasterRCNN(nn.Module):
         self.RCNN_roi_pool = ROIPool((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0/16.0)
         self.RCNN_roi_align = ROIAlign((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0/16.0, 0)
 
-    def forward(self, im_data, im_info, gt_boxes, num_boxes):
+    def forward(self, im_data, im_info, gt_boxes, gt_quadboxes, num_boxes):
         batch_size = im_data.size(0)
 
         im_info = im_info.data
         gt_boxes = gt_boxes.data
+        gt_quadboxes = gt_quadboxes.data
         num_boxes = num_boxes.data
 
         # feed image data to base model to obtain base feature map
@@ -55,18 +57,26 @@ class _fasterRCNN(nn.Module):
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
-            roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes)
-            rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
+            roi_data = self.RCNN_proposal_target(rois, gt_boxes, gt_quadboxes, num_boxes)
+            rois, rois_label, rois_target, quadrois_target,\
+            rois_inside_ws, quadrois_inside_ws, rois_outside_ws, quadrois_outside_ws = roi_data
 
             rois_label = Variable(rois_label.view(-1).long())
             rois_target = Variable(rois_target.view(-1, rois_target.size(2)))
             rois_inside_ws = Variable(rois_inside_ws.view(-1, rois_inside_ws.size(2)))
             rois_outside_ws = Variable(rois_outside_ws.view(-1, rois_outside_ws.size(2)))
+
+            quadrois_target = Variable(quadrois_target.view(-1, quadrois_target.size(2)))
+            quadrois_inside_ws = Variable(quadrois_inside_ws.view(-1, quadrois_inside_ws.size(2)))
+            quadrois_outside_ws = Variable(quadrois_outside_ws.view(-1, quadrois_outside_ws.size(2)))
         else:
             rois_label = None
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
+            quadrois_target = None
+            quadrois_inside_ws = None
+            quadrois_outside_ws = None
             rpn_loss_cls = 0
             rpn_loss_bbox = 0
 
@@ -83,11 +93,16 @@ class _fasterRCNN(nn.Module):
 
         # compute bbox offset
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
+        quadbox_pred = self.RCNN_quadbox_pred(pooled_feat)
         if self.training and not self.class_agnostic:
             # select the corresponding columns according to roi labels
             bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
             bbox_pred_select = torch.gather(bbox_pred_view, 1, rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
             bbox_pred = bbox_pred_select.squeeze(1)
+
+            quadbox_pred_view = quadbox_pred.view(quadbox_pred.size(0), int(quadbox_pred.size(1) / 8), 8)
+            quadbox_pred_select = torch.gather(quadbox_pred_view, 1, rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 8))
+            quadbox_pred = quadbox_pred_select.squeeze(1)
 
         # compute object classification probability
         cls_score = self.RCNN_cls_score(pooled_feat)
@@ -95,6 +110,7 @@ class _fasterRCNN(nn.Module):
 
         RCNN_loss_cls = 0
         RCNN_loss_bbox = 0
+        RCNN_loss_quadbox = 0
 
         if self.training:
             # classification loss
@@ -103,11 +119,14 @@ class _fasterRCNN(nn.Module):
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
 
+            # quadbox regression L1 loss
+            RCNN_loss_quadbox = _smooth_l1_loss(quadbox_pred, quadrois_target, quadrois_inside_ws, quadrois_outside_ws)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
+        quadbox_pred = quadbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+        return rois, cls_prob, bbox_pred, quadbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, RCNN_loss_quadbox, rois_label
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
@@ -126,6 +145,7 @@ class _fasterRCNN(nn.Module):
         normal_init(self.RCNN_rpn.RPN_bbox_pred, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_cls_score, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_bbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
+        normal_init(self.RCNN_quadbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
 
     def create_architecture(self):
         self._init_modules()
