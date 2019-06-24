@@ -83,14 +83,14 @@ def quadbox_transform_batch(ex_rois, gt_quadrois):
         ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths
         ex_ctr_y = ex_rois[:, 1] + 0.5 * ex_heights
 
-        gt_quadx1 = gt_quadrois[:, 0]
-        gt_quady1 = gt_quadrois[:, 1]
-        gt_quadx2 = gt_quadrois[:, 2]
-        gt_quady2 = gt_quadrois[:, 3]
-        gt_quadx3 = gt_quadrois[:, 4]
-        gt_quady3 = gt_quadrois[:, 5]
-        gt_quadx4 = gt_quadrois[:, 6]
-        gt_quady4 = gt_quadrois[:, 7]
+        gt_quadx1 = gt_quadrois[:, :, 0]
+        gt_quady1 = gt_quadrois[:, :, 1]
+        gt_quadx2 = gt_quadrois[:, :, 2]
+        gt_quady2 = gt_quadrois[:, :, 3]
+        gt_quadx3 = gt_quadrois[:, :, 4]
+        gt_quady3 = gt_quadrois[:, :, 5]
+        gt_quadx4 = gt_quadrois[:, :, 6]
+        gt_quady4 = gt_quadrois[:, :, 7]
 
         targets_dx1 = (gt_quadx1 - ex_ctr_x.view(1,-1).expand_as(gt_quadx1)) / ex_widths
         targets_dy1 = (gt_quady1 - ex_ctr_y.view(1,-1).expand_as(gt_quady1)) / ex_heights

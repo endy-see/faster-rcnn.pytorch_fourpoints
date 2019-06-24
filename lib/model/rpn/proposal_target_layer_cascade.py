@@ -225,7 +225,7 @@ class _ProposalTargetLayer(nn.Module):
 
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
             gt_quadrois_batch[i] = gt_quadboxes[i][gt_assignment[i][keep_inds]]
-        
+            
         bbox_target_data, quadbox_target_data = self._compute_targets_pytorch(
                 rois_batch[:,:,1:5], gt_rois_batch[:,:,:4], gt_quadrois_batch[:,:,:8])
 
