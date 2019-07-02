@@ -234,7 +234,7 @@ class roibatchLoader(data.Dataset):
         im_info = im_info.view(3)
 
         gt_boxes = torch.FloatTensor([1,1,1,1,1])
-        gt_quadboxes = torch.FloatTensor([1,1,1,1,1,1,1,1,1])
+        gt_quadboxes = torch.FloatTensor([1,1,1,1,1,1,1,1])
         num_boxes = 0
 
         return data, im_info, gt_boxes, gt_quadboxes, num_boxes

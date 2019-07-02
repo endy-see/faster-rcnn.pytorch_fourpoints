@@ -26,10 +26,10 @@ import pickle
 from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
-from model.rpn.bbox_transform import clip_boxes
+from model.rpn.bbox_transform import clip_boxes, clip_quadboxes
 # from model.nms.nms_wrapper import nms
 from model.roi_layers import nms
-from model.rpn.bbox_transform import bbox_transform_inv
+from model.rpn.bbox_transform import bbox_transform_inv, quadbox_transform_inv
 from model.utils.net_utils import save_net, load_net, vis_detections
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
@@ -58,7 +58,7 @@ def parse_args():
                       help='set config keys', default=None,
                       nargs=argparse.REMAINDER)
   parser.add_argument('--load_dir', dest='load_dir',
-                      help='directory to load models', default="models",
+                      help='directory to load models', default="output",
                       type=str)
   parser.add_argument('--cuda', dest='cuda',
                       help='whether use CUDA',
@@ -125,6 +125,10 @@ if __name__ == '__main__':
       args.imdb_name = "vg_150-50-50_minitrain"
       args.imdbval_name = "vg_150-50-50_minival"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  else:
+      args.imdb_name = args.dataset + "_trainval"
+      args.imdbval_name = args.dataset + "_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
 
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -176,6 +180,7 @@ if __name__ == '__main__':
   im_info = torch.FloatTensor(1)
   num_boxes = torch.LongTensor(1)
   gt_boxes = torch.FloatTensor(1)
+  gt_quadboxes = torch.FloatTensor(1)
 
   # ship to cuda
   if args.cuda:
@@ -183,12 +188,14 @@ if __name__ == '__main__':
     im_info = im_info.cuda()
     num_boxes = num_boxes.cuda()
     gt_boxes = gt_boxes.cuda()
+    gt_quadboxes = gt_quadboxes.cuda()
 
   # make variable
   im_data = Variable(im_data)
   im_info = Variable(im_info)
   num_boxes = Variable(num_boxes)
   gt_boxes = Variable(gt_boxes)
+  gt_quadboxes = Variable(gt_quadboxes)
 
   if args.cuda:
     cfg.CUDA = True
@@ -202,9 +209,9 @@ if __name__ == '__main__':
   vis = args.vis
 
   if vis:
-    thresh = 0.05
+    thresh = 0.7
   else:
-    thresh = 0.0
+    thresh = 0.3
 
   save_name = 'faster_rcnn_10'
   num_images = len(imdb.image_index)
@@ -232,13 +239,14 @@ if __name__ == '__main__':
               im_data.resize_(data[0].size()).copy_(data[0])
               im_info.resize_(data[1].size()).copy_(data[1])
               gt_boxes.resize_(data[2].size()).copy_(data[2])
-              num_boxes.resize_(data[3].size()).copy_(data[3])
+              gt_quadboxes.resize_(data[3].size()).copy_(data[3])
+              num_boxes.resize_(data[4].size()).copy_(data[4])
 
       det_tic = time.time()
-      rois, cls_prob, bbox_pred, \
+      rois, cls_prob, bbox_pred, quadbox_pred, \
       rpn_loss_cls, rpn_loss_box, \
-      RCNN_loss_cls, RCNN_loss_bbox, \
-      rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+      RCNN_loss_cls, RCNN_loss_bbox, RCNN_loss_quadbox, \
+      rois_label = fasterRCNN(im_data, im_info, gt_boxes, gt_quadboxes, num_boxes)
 
       scores = cls_prob.data
       boxes = rois.data[:, :, 1:5]
@@ -259,14 +267,32 @@ if __name__ == '__main__':
 
           pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
           pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+
+          quadbox_deltas = quadbox_pred.data
+          if cfg.TRAIN.QUADBOX_NORMALIZE_TARGETS_PRECOMPUTED:
+              if args.class_agnostic:
+                  quadbox_deltas = quadbox_deltas.view(-1, 8) * torch.FloatTensor(cfg.TRAIN.QUADBOX_NORMALIZE_STDS).cuda() \
+                               + torch.FloatTensor(cfg.TRAIN.QUADBOX_NORMALIZE_MEANS).cuda()
+                  quadbox_deltas = quadbox_deltas.view(1, -1, 8)
+              else:
+                  quadbox_deltas = quadbox_deltas.view(-1, 8) * torch.FloatTensor(cfg.TRAIN.QUADBOX_NORMALIZE_STDS).cuda() \
+                               + torch.FloatTensor(cfg.TRAIN.QUADBOX_NORMALIZE_MEANS).cuda()
+                  quadbox_deltas = quadbox_deltas.view(1, -1, 8 * len(imdb.classes))
+
+          pred_quadboxes = quadbox_transform_inv(boxes, quadbox_deltas)
+          pred_quadboxes = clip_quadboxes(pred_quadboxes, im_info.data, 1)
+
       else:
           # Simply repeat the boxes, once for each class
           pred_boxes = np.tile(boxes, (1, scores.shape[1]))
+          pred_quadboxes = np.tile(boxes, (1, scores.shape[1]))
 
       pred_boxes /= data[1][0][2].item()
+      pred_quadboxes /= data[1][0][2].item()
 
       scores = scores.squeeze()
       pred_boxes = pred_boxes.squeeze()
+      pred_quadboxes = pred_quadboxes.squeeze()
       det_toc = time.time()
       detect_time = det_toc - det_tic
       misc_tic = time.time()
@@ -281,10 +307,12 @@ if __name__ == '__main__':
             _, order = torch.sort(cls_scores, 0, True)
             if args.class_agnostic:
               cls_boxes = pred_boxes[inds, :]
+              cls_quadboxes = pred_quadboxes[inds, :]
             else:
               cls_boxes = pred_boxes[inds][:, j * 4:(j + 1) * 4]
-            
-            cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
+              cls_quadboxes = pred_quadboxes[inds][:, j * 8:(j + 1) * 8]
+
+            cls_dets = torch.cat((cls_boxes, cls_quadboxes, cls_scores.unsqueeze(1)), 1)
             # cls_dets = torch.cat((cls_boxes, cls_scores), 1)
             cls_dets = cls_dets[order]
             keep = nms(cls_boxes[order, :], cls_scores[order], cfg.TEST.NMS)
@@ -312,9 +340,11 @@ if __name__ == '__main__':
           .format(i + 1, num_images, detect_time, nms_time))
       sys.stdout.flush()
 
+      output_img_path = '/home/zhaoyanmei/faster-rcnn.pytorch_modify/output_img/'
+      path_name = os.path.basename(imdb.image_path_at(i))
       if vis:
-          cv2.imwrite('result.png', im2show)
-          pdb.set_trace()
+          cv2.imwrite(output_img_path + path_name, im2show)
+         # pdb.set_trace()
           #cv2.imshow('test', im2show)
           #cv2.waitKey(0)
 

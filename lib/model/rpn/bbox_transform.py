@@ -80,8 +80,8 @@ def quadbox_transform_batch(ex_rois, gt_quadrois):
     if ex_rois.dim() == 2:
         ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
         ex_heights = ex_rois[:, 3] - ex_rois[:, 1] + 1.0
-        ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths
-        ex_ctr_y = ex_rois[:, 1] + 0.5 * ex_heights
+        #ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths
+        #ex_ctr_y = ex_rois[:, 1] + 0.5 * ex_heights
 
         gt_quadx1 = gt_quadrois[:, :, 0]
         gt_quady1 = gt_quadrois[:, :, 1]
@@ -92,20 +92,20 @@ def quadbox_transform_batch(ex_rois, gt_quadrois):
         gt_quadx4 = gt_quadrois[:, :, 6]
         gt_quady4 = gt_quadrois[:, :, 7]
 
-        targets_dx1 = (gt_quadx1 - ex_ctr_x.view(1,-1).expand_as(gt_quadx1)) / ex_widths
-        targets_dy1 = (gt_quady1 - ex_ctr_y.view(1,-1).expand_as(gt_quady1)) / ex_heights
-        targets_dx2 = (gt_quadx2 - ex_ctr_x.view(1,-1).expand_as(gt_quadx2)) / ex_widths
-        targets_dy2 = (gt_quady2 - ex_ctr_y.view(1,-1).expand_as(gt_quady2)) / ex_heights
-        targets_dx3 = (gt_quadx3 - ex_ctr_x.view(1, -1).expand_as(gt_quadx3)) / ex_widths
-        targets_dy3 = (gt_quady3 - ex_ctr_y.view(1, -1).expand_as(gt_quady3)) / ex_heights
-        targets_dx4 = (gt_quadx4 - ex_ctr_x.view(1, -1).expand_as(gt_quadx4)) / ex_widths
-        targets_dy4 = (gt_quady4 - ex_ctr_y.view(1, -1).expand_as(gt_quady4)) / ex_heights
+        targets_dx1 = (gt_quadx1 - ex_rois[:, 0].view(1,-1).expand_as(gt_quadx1)) / ex_widths
+        targets_dy1 = (gt_quady1 - ex_rois[:, 1].view(1,-1).expand_as(gt_quady1)) / ex_heights
+        targets_dx2 = (gt_quadx2 - ex_rois[:, 2].view(1,-1).expand_as(gt_quadx2)) / ex_widths
+        targets_dy2 = (gt_quady2 - ex_rois[:, 1].view(1,-1).expand_as(gt_quady2)) / ex_heights
+        targets_dx3 = (gt_quadx3 - ex_rois[:, 2].view(1, -1).expand_as(gt_quadx3)) / ex_widths
+        targets_dy3 = (gt_quady3 - ex_rois[:, 3].view(1, -1).expand_as(gt_quady3)) / ex_heights
+        targets_dx4 = (gt_quadx4 - ex_rois[:, 0].view(1, -1).expand_as(gt_quadx4)) / ex_widths
+        targets_dy4 = (gt_quady4 - ex_rois[:, 3].view(1, -1).expand_as(gt_quady4)) / ex_heights
 
     elif ex_rois.dim() == 3:
         ex_widths = ex_rois[:, :, 2] - ex_rois[:, :, 0] + 1.0
         ex_heights = ex_rois[:,:, 3] - ex_rois[:,:, 1] + 1.0
-        ex_ctr_x = ex_rois[:, :, 0] + 0.5 * ex_widths
-        ex_ctr_y = ex_rois[:, :, 1] + 0.5 * ex_heights
+        #ex_ctr_x = ex_rois[:, :, 0] + 0.5 * ex_widths
+        #ex_ctr_y = ex_rois[:, :, 1] + 0.5 * ex_heights
 
         gt_quadx1 = gt_quadrois[:, :, 0]
         gt_quady1 = gt_quadrois[:, :, 1]
@@ -116,14 +116,14 @@ def quadbox_transform_batch(ex_rois, gt_quadrois):
         gt_quadx4 = gt_quadrois[:, :, 6]
         gt_quady4 = gt_quadrois[:, :, 7]
 
-        targets_dx1 = (gt_quadx1 - ex_ctr_x) / ex_widths
-        targets_dy1 = (gt_quady1 - ex_ctr_y) / ex_heights
-        targets_dx2 = (gt_quadx2 - ex_ctr_x) / ex_widths
-        targets_dy2 = (gt_quady2 - ex_ctr_y) / ex_heights
-        targets_dx3 = (gt_quadx3 - ex_ctr_x) / ex_widths
-        targets_dy3 = (gt_quady3 - ex_ctr_y) / ex_heights
-        targets_dx4 = (gt_quadx4 - ex_ctr_x) / ex_widths
-        targets_dy4 = (gt_quady4 - ex_ctr_y) / ex_heights
+        targets_dx1 = (gt_quadx1 - ex_rois[:, :, 0]) / ex_widths
+        targets_dy1 = (gt_quady1 - ex_rois[:, :, 1]) / ex_heights
+        targets_dx2 = (gt_quadx2 - ex_rois[:, :, 2]) / ex_widths
+        targets_dy2 = (gt_quady2 - ex_rois[:, :, 1]) / ex_heights
+        targets_dx3 = (gt_quadx3 - ex_rois[:, :, 2]) / ex_widths
+        targets_dy3 = (gt_quady3 - ex_rois[:, :, 3]) / ex_heights
+        targets_dx4 = (gt_quadx4 - ex_rois[:, :, 0]) / ex_widths
+        targets_dy4 = (gt_quady4 - ex_rois[:, :, 3]) / ex_heights
     else:
         raise ValueError('ex_roi input dimension is not correct.')
 
@@ -165,8 +165,8 @@ def bbox_transform_inv(boxes, deltas, batch_size):
 def quadbox_transform_inv(boxes, quaddeltas):
     widths = boxes[:, :, 2] - boxes[:, :, 0] + 1.0
     heights = boxes[:, :, 3] - boxes[:, :, 1] + 1.0
-    ctr_x = boxes[:, :, 0] + 0.5 * widths
-    ctr_y = boxes[:, :, 1] + 0.5 * heights
+    #ctr_x = boxes[:, :, 0] + 0.5 * widths
+    #ctr_y = boxes[:, :, 1] + 0.5 * heights
 
     dx1 = quaddeltas[:, :, 0::8]
     dy1 = quaddeltas[:, :, 1::8]
@@ -177,14 +177,14 @@ def quadbox_transform_inv(boxes, quaddeltas):
     dx4 = quaddeltas[:, :, 6::8]
     dy4 = quaddeltas[:, :, 7::8]
 
-    pred_quadx1 = dx1 * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
-    pred_quady1 = dy1 * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
-    pred_quadx2 = dx2 * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
-    pred_quady2 = dy2 * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
-    pred_quadx3 = dx3 * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
-    pred_quady3 = dy3 * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
-    pred_quadx4 = dx4 * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
-    pred_quady4 = dy4 * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
+    pred_quadx1 = dx1 * widths.unsqueeze(2) + boxes[:, :, 0].unsqueeze(2)
+    pred_quady1 = dy1 * heights.unsqueeze(2) + boxes[:, :, 1].unsqueeze(2)
+    pred_quadx2 = dx2 * widths.unsqueeze(2) + boxes[:, :, 2].unsqueeze(2)
+    pred_quady2 = dy2 * heights.unsqueeze(2) + boxes[:, :, 1].unsqueeze(2)
+    pred_quadx3 = dx3 * widths.unsqueeze(2) + boxes[:, :, 2].unsqueeze(2)
+    pred_quady3 = dy3 * heights.unsqueeze(2) + boxes[:, :, 3].unsqueeze(2)
+    pred_quadx4 = dx4 * widths.unsqueeze(2) + boxes[:, :, 0].unsqueeze(2)
+    pred_quady4 = dy4 * heights.unsqueeze(2) + boxes[:, :, 3].unsqueeze(2)
 
     pred_quadboxes = quaddeltas.clone()
     pred_quadboxes[:, :, 0::8] = pred_quadx1
@@ -228,6 +228,20 @@ def clip_boxes(boxes, im_shape, batch_size):
         boxes[i,:,3::4].clamp_(0, im_shape[i, 0]-1)
 
     return boxes
+
+
+def clip_quadboxes(quadboxes, im_shape, batch_size):
+
+    for i in range(batch_size):
+        quadboxes[i,:,0::4].clamp_(0, im_shape[i, 1]-1)
+        quadboxes[i,:,1::4].clamp_(0, im_shape[i, 0]-1)
+        quadboxes[i,:,2::4].clamp_(0, im_shape[i, 1]-1)
+        quadboxes[i,:,3::4].clamp_(0, im_shape[i, 0]-1)
+        quadboxes[i,:,4::4].clamp_(0, im_shape[i, 1]-1)
+        quadboxes[i,:,5::4].clamp_(0, im_shape[i, 0]-1)
+        quadboxes[i,:,6::4].clamp_(0, im_shape[i, 1]-1)
+        quadboxes[i,:,7::4].clamp_(0, im_shape[i, 0]-1)
+    return quadboxes
 
 
 def bbox_overlaps(anchors, gt_boxes):

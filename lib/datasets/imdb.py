@@ -266,6 +266,7 @@ class imdb(object):
     assert len(a) == len(b)
     for i in range(len(a)):
       a[i]['boxes'] = np.vstack((a[i]['boxes'], b[i]['boxes']))
+      a[i]['quadboxes'] = np.vstack((a[i]['quadboxes'], b[i]['quadboxes']))
       a[i]['gt_classes'] = np.hstack((a[i]['gt_classes'],
                                       b[i]['gt_classes']))
       a[i]['gt_overlaps'] = scipy.sparse.vstack([a[i]['gt_overlaps'],
