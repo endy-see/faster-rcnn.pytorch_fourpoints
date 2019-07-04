@@ -50,7 +50,7 @@ def bbox_transform_batch(ex_rois, gt_rois):
         targets_dy = (gt_ctr_y - ex_ctr_y.view(1,-1).expand_as(gt_ctr_y)) / ex_heights
         targets_dw = torch.log(gt_widths / ex_widths.view(1,-1).expand_as(gt_widths))
         targets_dh = torch.log(gt_heights / ex_heights.view(1,-1).expand_as(gt_heights))
-
+    
     elif ex_rois.dim() == 3:
         ex_widths = ex_rois[:, :, 2] - ex_rois[:, :, 0] + 1.0
         ex_heights = ex_rois[:,:, 3] - ex_rois[:,:, 1] + 1.0
@@ -76,57 +76,27 @@ def bbox_transform_batch(ex_rois, gt_rois):
 
 
 def quadbox_transform_batch(ex_rois, gt_quadrois):
+    ex_widths = ex_rois[:, :, 2] - ex_rois[:, :, 0] + 1.0
+    ex_heights = ex_rois[:,:, 3] - ex_rois[:,:, 1] + 1.0
 
-    if ex_rois.dim() == 2:
-        ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
-        ex_heights = ex_rois[:, 3] - ex_rois[:, 1] + 1.0
-        #ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths
-        #ex_ctr_y = ex_rois[:, 1] + 0.5 * ex_heights
-
-        gt_quadx1 = gt_quadrois[:, :, 0]
-        gt_quady1 = gt_quadrois[:, :, 1]
-        gt_quadx2 = gt_quadrois[:, :, 2]
-        gt_quady2 = gt_quadrois[:, :, 3]
-        gt_quadx3 = gt_quadrois[:, :, 4]
-        gt_quady3 = gt_quadrois[:, :, 5]
-        gt_quadx4 = gt_quadrois[:, :, 6]
-        gt_quady4 = gt_quadrois[:, :, 7]
-
-        targets_dx1 = (gt_quadx1 - ex_rois[:, 0].view(1,-1).expand_as(gt_quadx1)) / ex_widths
-        targets_dy1 = (gt_quady1 - ex_rois[:, 1].view(1,-1).expand_as(gt_quady1)) / ex_heights
-        targets_dx2 = (gt_quadx2 - ex_rois[:, 2].view(1,-1).expand_as(gt_quadx2)) / ex_widths
-        targets_dy2 = (gt_quady2 - ex_rois[:, 1].view(1,-1).expand_as(gt_quady2)) / ex_heights
-        targets_dx3 = (gt_quadx3 - ex_rois[:, 2].view(1, -1).expand_as(gt_quadx3)) / ex_widths
-        targets_dy3 = (gt_quady3 - ex_rois[:, 3].view(1, -1).expand_as(gt_quady3)) / ex_heights
-        targets_dx4 = (gt_quadx4 - ex_rois[:, 0].view(1, -1).expand_as(gt_quadx4)) / ex_widths
-        targets_dy4 = (gt_quady4 - ex_rois[:, 3].view(1, -1).expand_as(gt_quady4)) / ex_heights
-
-    elif ex_rois.dim() == 3:
-        ex_widths = ex_rois[:, :, 2] - ex_rois[:, :, 0] + 1.0
-        ex_heights = ex_rois[:,:, 3] - ex_rois[:,:, 1] + 1.0
-        #ex_ctr_x = ex_rois[:, :, 0] + 0.5 * ex_widths
-        #ex_ctr_y = ex_rois[:, :, 1] + 0.5 * ex_heights
-
-        gt_quadx1 = gt_quadrois[:, :, 0]
-        gt_quady1 = gt_quadrois[:, :, 1]
-        gt_quadx2 = gt_quadrois[:, :, 2]
-        gt_quady2 = gt_quadrois[:, :, 3]
-        gt_quadx3 = gt_quadrois[:, :, 4]
-        gt_quady3 = gt_quadrois[:, :, 5]
-        gt_quadx4 = gt_quadrois[:, :, 6]
-        gt_quady4 = gt_quadrois[:, :, 7]
-
-        targets_dx1 = (gt_quadx1 - ex_rois[:, :, 0]) / ex_widths
-        targets_dy1 = (gt_quady1 - ex_rois[:, :, 1]) / ex_heights
-        targets_dx2 = (gt_quadx2 - ex_rois[:, :, 2]) / ex_widths
-        targets_dy2 = (gt_quady2 - ex_rois[:, :, 1]) / ex_heights
-        targets_dx3 = (gt_quadx3 - ex_rois[:, :, 2]) / ex_widths
-        targets_dy3 = (gt_quady3 - ex_rois[:, :, 3]) / ex_heights
-        targets_dx4 = (gt_quadx4 - ex_rois[:, :, 0]) / ex_widths
-        targets_dy4 = (gt_quady4 - ex_rois[:, :, 3]) / ex_heights
-    else:
-        raise ValueError('ex_roi input dimension is not correct.')
-
+    gt_quadx1 = gt_quadrois[:, :, 0]
+    gt_quady1 = gt_quadrois[:, :, 1]
+    gt_quadx2 = gt_quadrois[:, :, 2]
+    gt_quady2 = gt_quadrois[:, :, 3]
+    gt_quadx3 = gt_quadrois[:, :, 4]
+    gt_quady3 = gt_quadrois[:, :, 5]
+    gt_quadx4 = gt_quadrois[:, :, 6]
+    gt_quady4 = gt_quadrois[:, :, 7]
+    
+    targets_dx1 = (gt_quadx1 - ex_rois[:, :, 0]) / ex_widths
+    targets_dy1 = (gt_quady1 - ex_rois[:, :, 1]) / ex_heights
+    targets_dx2 = (gt_quadx2 - ex_rois[:, :, 2]) / ex_widths
+    targets_dy2 = (gt_quady2 - ex_rois[:, :, 1]) / ex_heights
+    targets_dx3 = (gt_quadx3 - ex_rois[:, :, 2]) / ex_widths
+    targets_dy3 = (gt_quady3 - ex_rois[:, :, 3]) / ex_heights
+    targets_dx4 = (gt_quadx4 - ex_rois[:, :, 0]) / ex_widths
+    targets_dy4 = (gt_quady4 - ex_rois[:, :, 3]) / ex_heights
+   
     targets = torch.stack(
         (targets_dx1, targets_dy1, targets_dx2, targets_dy2,
          targets_dx3, targets_dy3, targets_dx4, targets_dy4),2)

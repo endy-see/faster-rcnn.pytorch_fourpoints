@@ -186,8 +186,8 @@ if __name__ == '__main__':
   if args.set_cfgs is not None:
     cfg_from_list(args.set_cfgs)
 
-  #print('Using config:')
-  #pprint.pprint(cfg)
+  print('Using config:')
+  pprint.pprint(cfg)
   np.random.seed(cfg.RNG_SEED)
 
   #torch.backends.cudnn.benchmark = True
@@ -235,7 +235,8 @@ if __name__ == '__main__':
   im_info = Variable(im_info)
   num_boxes = Variable(num_boxes)
   gt_boxes = Variable(gt_boxes)
-
+  gt_quadboxes = Variable(gt_quadboxes)
+   
   if args.cuda:
     cfg.CUDA = True
 
