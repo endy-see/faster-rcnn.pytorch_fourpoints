@@ -297,7 +297,7 @@ if __name__ == '__main__':
     fasterRCNN = nn.DataParallel(fasterRCNN)
 
   iters_per_epoch = int(train_size / args.batch_size)
-  iters_per_epoch = 1000
+  iters_per_epoch = 5000
 
   if args.use_tfboard:
     from tensorboardX import SummaryWriter
@@ -315,7 +315,11 @@ if __name__ == '__main__':
 
     data_iter = iter(dataloader)
     for step in range(iters_per_epoch):
-      data = next(data_iter)
+      try:
+        data = next(data_iter)
+      except StopIteration:
+        batch_iterator = iter(dataloader)
+        data = next(batch_iterator)
       with torch.no_grad():
               im_data.resize_(data[0].size()).copy_(data[0])
               im_info.resize_(data[1].size()).copy_(data[1])
